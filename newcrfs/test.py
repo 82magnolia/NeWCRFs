@@ -88,11 +88,15 @@ def test(params):
     with torch.no_grad():
         for _, sample in enumerate(tqdm(dataloader.data)):
             image = Variable(sample['image'].cuda())
-            # Predict
-            depth_est = model(image)
+            B, C, H, W = image.shape
+            new_image = torch.zeros([B, C, args.input_height, args.input_width])
+            adj_height = min(args.input_height, H)
+            adj_width = min(args.input_width, W)
+            new_image[..., args.input_height // 2 - adj_height // 2: args.input_height // 2 + adj_height // 2, args.input_width // 2 - adj_width // 2: args.input_width // 2 + adj_width // 2] = image[..., H // 2 - adj_height // 2: H // 2 + adj_height // 2, W // 2 - adj_width // 2: W // 2 + adj_width // 2]
+            depth_est = model(new_image)
             post_process = True
             if post_process:
-                image_flipped = flip_lr(image)
+                image_flipped = flip_lr(new_image)
                 depth_est_flipped = model(image_flipped)
                 depth_est = post_process_depth(depth_est, depth_est_flipped)
 
@@ -139,22 +143,18 @@ def test(params):
             filename_cmap_png = save_name + '/cmap/' + lines[s].split()[0].split('/')[-1].replace('.jpg', '.png')
             filename_image_png = save_name + '/rgb/' + lines[s].split()[0].split('/')[-1]
         else:
-            scene_name = lines[s].split()[0].split('/')[0]
-            filename_pred_png = save_name + '/raw/' + scene_name + '_' + lines[s].split()[0].split('/')[1].replace(
-                '.jpg', '.png')
-            filename_cmap_png = save_name + '/cmap/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1].replace(
-                '.jpg', '.png')
-            filename_gt_png = save_name + '/gt/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1].replace(
-                '.jpg', '_gt.png')
-            filename_image_png = save_name + '/rgb/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1]
-        
+            filename_pred_png = save_name + '/raw/' + lines[s].split()[0].split('/')[-1].replace('.jpg', '.png')
+            filename_cmap_png = save_name + '/cmap/' + lines[s].split()[0].split('/')[-1].replace('.jpg', '.png')
+            filename_image_png = save_name + '/rgb/' + lines[s].split()[0].split('/')[-1]
+       
         rgb_path = os.path.join(args.data_path, './' + lines[s].split()[0])
         image = cv2.imread(rgb_path)
+        """
         if args.dataset == 'nyu':
             gt_path = os.path.join(args.data_path, './' + lines[s].split()[1])
             gt = cv2.imread(gt_path, -1).astype(np.float32) / 1000.0  # Visualization purpose only
             gt[gt == 0] = np.amax(gt)
-        
+        """ 
         pred_depth = pred_depths[s]
         
         if args.dataset == 'kitti' or args.dataset == 'kittipred':
@@ -168,7 +168,6 @@ def test(params):
         if args.save_viz:
             cv2.imwrite(filename_image_png, image[10:-1 - 9, 10:-1 - 9, :])
             if args.dataset == 'nyu':
-                plt.imsave(filename_gt_png, (10 - gt) / 10, cmap='plasma')
                 pred_depth_cropped = pred_depth[10:-1 - 9, 10:-1 - 9]
                 plt.imsave(filename_cmap_png, (10 - pred_depth) / 10, cmap='plasma')
             else:
