@@ -267,6 +267,8 @@ class ToTensor(object):
                 'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
         
         if isinstance(pic, np.ndarray):
+            if len(pic.shape) == 2:
+                pic = np.stack([pic] * 3, axis=-1)
             img = torch.from_numpy(pic.transpose((2, 0, 1)))
             return img
         
